@@ -75,6 +75,7 @@ $RECYCLE.BIN/
 target/
 xrun.history
 xrun.log
+xcelium.d/
 
 out/
 .metals/
@@ -82,3 +83,5 @@ out/
 
 chippy/
 generatedVerilog/
+
+.bsp/
