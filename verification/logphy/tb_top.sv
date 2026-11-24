@@ -148,8 +148,51 @@ module tb_top;
     check_rdi_reset_exit();
   endtask
 
+  // UCIe 3.0 §10.1.3.1 Test the LogPhy handshake in RDIWakeHandshakeResponder.scala
+  // TODO: doesn't yet test rule 4, 5, 6 in the spec
+  localparam int WAKE_ACK_TIMEOUT_CYCLES = 100;
+  assert_wake_bubble :
+  assert property (@(posedge clock) disable iff (reset) $rose(
+      rdi.lp_wake_req
+  ) |-> !rdi.pl_wake_ack ##1 !rdi.pl_wake_ack)
+  else $fatal(1, "pl_wake_ack rose before the required bubble");
+
+  assert_wake_ack_high_timeout :
+  assert property (@(posedge clock) disable iff (reset) $rose(
+      rdi.lp_wake_req
+  ) |-> ##[2:WAKE_ACK_TIMEOUT_CYCLES] rdi.pl_wake_ack)
+  else $fatal(1, "pl_wake_ack did not arrive within the testbench timeout");
+
+  assert_release_order :
+  assert property (@(posedge clock) disable iff (reset) $fell(rdi.pl_wake_ack) |-> !rdi.lp_wake_req)
+  else $fatal(1, "pl_wake_ack fell while lp_wake_req was high");
+
+  assert_wake_ack_low_timeout :
+  assert property (@(posedge clock) disable iff (reset) $fell(
+      rdi.lp_wake_req
+  ) |-> ##[1:WAKE_ACK_TIMEOUT_CYCLES] !rdi.pl_wake_ack)
+  else $fatal(1, "pl_wake_ack did not clear within the testbench timeout");
+
+  task automatic test_rdi_wake_with_clocks_ready();
+    @(negedge clock);
+    rdi.lp_wake_req = 1'b1;
+    afe.status_clocksUngatedAndStable = 1'b0;
+    repeat ($urandom_range(8, 1)) @(posedge clock);  // Model a delayed PHY clock
+    if (rdi.pl_wake_ack !== 1'b0) $fatal(1, "pl_wake_ack asserted before PHY clocks were ready");
+    @(negedge clock);
+    afe.status_clocksUngatedAndStable = 1'b1;
+    wait (rdi.pl_wake_ack === 1'b1);
+
+    repeat ($urandom_range(8, 1)) @(posedge clock);  // Keep lp_wake_req high for more samples
+
+    @(negedge clock);
+    rdi.lp_wake_req = 1'b0;
+    wait (rdi.pl_wake_ack === 1'b0);
+  endtask
+
   initial begin
     reset_dut();
+    test_rdi_wake_with_clocks_ready();
     $display("PASS: LogPHY tests");
     $finish;
   end
