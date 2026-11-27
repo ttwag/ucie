@@ -1,3 +1,4 @@
 logphy_interface.sv
 logphy_wrapper.sv
+logphy_assertions.sv
 tb_top.sv

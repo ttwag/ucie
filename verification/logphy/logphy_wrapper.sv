@@ -1,8 +1,8 @@
 module logphy_wrapper (
-    ucie_rdi_if.logical_phy             rdi,
-    logical_phy_afe_if.logical_phy      afe,
-    logical_phy_sideband_if.logical_phy sideband,
-    logical_phy_control_if.logical_phy  ctrl
+    ucie_rdi_if             rdi,
+    logical_phy_afe_if      afe,
+    logical_phy_sideband_if sideband,
+    logical_phy_control_if  ctrl
 );
   LogicalPhy dut (
       // DUT clock and reset

@@ -13,9 +13,15 @@ module tb_top;
       .lclk (clock)
   );
 
-  logical_phy_afe_if afe (.reset(reset));
+  logical_phy_afe_if afe (
+      .reset(reset),
+      .clock(clock)
+  );
 
-  logical_phy_sideband_if sideband (.reset(reset));
+  logical_phy_sideband_if sideband (
+      .reset(reset),
+      .clock(clock)
+  );
 
   logical_phy_control_if ctrl (
       .clock(clock),
@@ -23,6 +29,7 @@ module tb_top;
   );
 
   logphy_wrapper dut (.*);
+  logphy_assertions rdi_assertions (.rdi(rdi), .lt_state(ctrl.status_ltState));
 
   task automatic drive_rdi_idle();
     rdi.lp_irdy = 'b0;
@@ -95,40 +102,6 @@ module tb_top;
     ctrl.ctrl_runtimeRequestForRepair                  = $urandom_range(1, 0);
   endtask
 
-  `define CHECK_RDI_FIELD(field, expected)                                \
-  if (rdi.field !== (expected)) begin                                   \
-    $display("%0t RDI reset exit: %s = %0h, expected %0h",              \
-             $time, `"field`", rdi.field, (expected));                   \
-    failures++;                                                         \
-  end
-
-  task automatic check_rdi_reset_exit();
-    int unsigned failures = 0;
-
-    `CHECK_RDI_FIELD(pl_trdy, '0)
-    `CHECK_RDI_FIELD(pl_valid, '0)
-    `CHECK_RDI_FIELD(pl_data, '0)
-    `CHECK_RDI_FIELD(pl_state_sts, '0)
-    `CHECK_RDI_FIELD(pl_inband_pres, '0)
-    `CHECK_RDI_FIELD(pl_error, '0)
-    `CHECK_RDI_FIELD(pl_cerror, '0)
-    `CHECK_RDI_FIELD(pl_nferror, '0)
-    `CHECK_RDI_FIELD(pl_trainerror, '0)
-    `CHECK_RDI_FIELD(pl_phyinrecenter, '0)
-    `CHECK_RDI_FIELD(pl_stallreq, '0)
-    `CHECK_RDI_FIELD(pl_speedmode, '0)
-    `CHECK_RDI_FIELD(pl_max_speedmode, '0)
-    `CHECK_RDI_FIELD(pl_clk_req, '0)
-    `CHECK_RDI_FIELD(pl_wake_ack, '0)
-    `CHECK_RDI_FIELD(pl_cfg, '0)
-    `CHECK_RDI_FIELD(pl_cfg_vld, '0)
-    `CHECK_RDI_FIELD(pl_cfg_crd, '0)
-
-    if (failures != 0) $fatal(1, "RDI reset-exit check failed on %0d signal(s)", failures);
-  endtask
-
-  // UCIe 3.0 §10.1.1: Check the PHY-driven RDI signals at domain reset exit.
-  // pl_lnk_cfg is ignored here because it's irrelevant outside of active and retrain region
   task automatic reset_dut();
     // drive all rdi lp signals to zero
     drive_rdi_idle();
@@ -145,33 +118,7 @@ module tb_top;
     reset = 1'b0;
     @(posedge clock);
     @(negedge clock);
-    check_rdi_reset_exit();
   endtask
-
-  // UCIe 3.0 §10.1.3.1 Test the LogPhy handshake in RDIWakeHandshakeResponder.scala
-  // TODO: doesn't yet test rule 4, 5, 6 in the spec
-  localparam int WAKE_ACK_TIMEOUT_CYCLES = 100;
-  assert_wake_bubble :
-  assert property (@(posedge clock) disable iff (reset) $rose(
-      rdi.lp_wake_req
-  ) |-> !rdi.pl_wake_ack ##1 !rdi.pl_wake_ack)
-  else $fatal(1, "pl_wake_ack rose before the required bubble");
-
-  assert_wake_ack_high_timeout :
-  assert property (@(posedge clock) disable iff (reset) $rose(
-      rdi.lp_wake_req
-  ) |-> ##[2:WAKE_ACK_TIMEOUT_CYCLES] rdi.pl_wake_ack)
-  else $fatal(1, "pl_wake_ack did not arrive within the testbench timeout");
-
-  assert_release_order :
-  assert property (@(posedge clock) disable iff (reset) $fell(rdi.pl_wake_ack) |-> !rdi.lp_wake_req)
-  else $fatal(1, "pl_wake_ack fell while lp_wake_req was high");
-
-  assert_wake_ack_low_timeout :
-  assert property (@(posedge clock) disable iff (reset) $fell(
-      rdi.lp_wake_req
-  ) |-> ##[1:WAKE_ACK_TIMEOUT_CYCLES] !rdi.pl_wake_ack)
-  else $fatal(1, "pl_wake_ack did not clear within the testbench timeout");
 
   task automatic test_rdi_wake_with_clocks_ready();
     @(negedge clock);
