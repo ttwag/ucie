@@ -3,7 +3,6 @@ module tb_top;
 
   logic clock = 1'b0;
   logic reset = 1'b1;
-  logic clocks_ready = 1'b0;
 
   always #5ns clock = ~clock;
 
@@ -13,23 +12,12 @@ module tb_top;
       .lclk (clock)
   );
 
-  logical_phy_afe_if afe (
-      .reset(reset),
-      .clock(clock)
-  );
+  logical_phy_control_if ctrl (.clock(clock), .reset(reset));
+  logical_phy_status_if status (.clock(clock), .reset(reset));
+  logical_phy_analog_if analog (.clock(clock), .reset(reset));
 
-  logical_phy_sideband_if sideband (
-      .reset(reset),
-      .clock(clock)
-  );
-
-  logical_phy_control_if ctrl (
-      .clock(clock),
-      .reset(reset)
-  );
-
-  logphy_wrapper dut (.*);
-  logphy_assertions rdi_assertions (.rdi(rdi), .lt_state(ctrl.status_ltState));
+  logphy_wrapper dut (.rdi(rdi), .ctrl(ctrl), .status(status), .analog(analog));
+  logphy_assertions rdi_assertions (.rdi(rdi), .lt_state(status.training.ltState));
 
   task automatic drive_rdi_idle();
     rdi.lp_irdy = 'b0;
@@ -45,70 +33,67 @@ module tb_top;
     rdi.lp_cfg_crd = 'b0;
   endtask
 
-  task automatic randomize_afe_inputs();
-    afe.mainband_tx_ready = $urandom_range(1, 0);
-    afe.mainband_rx_valid = $urandom_range(1, 0);
+  task automatic randomize_analog_inputs();
+    analog.mainband_tx_ready = $urandom_range(1, 0);
+    analog.mainband_rx.valid = $urandom_range(1, 0);
 
-    foreach (afe.mainband_rx_bits_data[lane]) begin
-      afe.mainband_rx_bits_data[lane] = $urandom();
+    foreach (analog.mainband_rx.data[lane]) begin
+      analog.mainband_rx.data[lane] = $urandom();
     end
 
-    afe.mainband_rx_bits_valid        = $urandom();
-    afe.mainband_rx_bits_clkP         = $urandom();
-    afe.mainband_rx_bits_clkN         = $urandom();
-    afe.mainband_rx_bits_trk          = $urandom();
+    analog.mainband_rx.valid_lane = $urandom();
+    analog.mainband_rx.clkP = $urandom();
+    analog.mainband_rx.clkN = $urandom();
+    analog.mainband_rx.trk = $urandom();
 
-    afe.status_pllLock                = $urandom_range(1, 0);
-    afe.status_clocksUngatedAndStable = $urandom_range(1, 0);
-    afe.status_txSelfCalDone          = $urandom_range(1, 0);
-  endtask
+    analog.status.pllLock = $urandom_range(1, 0);
+    analog.status.clocksUngatedAndStable = $urandom_range(1, 0);
+    analog.status.txSelfCalDone = $urandom_range(1, 0);
 
-  task automatic randomize_sideband_inputs();
-    sideband.sidebandLink_in_bits = $urandom_range(1, 0);
-    sideband.sidebandLink_in_fwClock = $urandom_range(1, 0);
+    analog.sideband_rx.bits = $urandom_range(1, 0);
+    analog.sideband_rx.fwClock = $urandom_range(1, 0);
   endtask
 
   task automatic randomize_ctrl_inputs();
-    ctrl.ctrl_pwrGood                                  = $urandom_range(1, 0);
-    ctrl.ctrl_retryTrainingAmt                         = $urandom();
+    ctrl.link_control.pwrGood = $urandom_range(1, 0);
+    ctrl.link_control.retryTrainingAmt = $urandom();
 
-    ctrl.ctrl_localPhyParamSettings_valid              = $urandom_range(1, 0);
-    ctrl.ctrl_localPhyParamSettings_bits_voltageSwing  = $urandom();
-    ctrl.ctrl_localPhyParamSettings_bits_maxDataRate   = $urandom();
-    ctrl.ctrl_localPhyParamSettings_bits_clockMode     = $urandom_range(1, 0);
-    ctrl.ctrl_localPhyParamSettings_bits_clockPhase    = $urandom_range(1, 0);
-    ctrl.ctrl_localPhyParamSettings_bits_ucieSx8       = $urandom_range(1, 0);
-    ctrl.ctrl_localPhyParamSettings_bits_sbFeatExt     = $urandom_range(1, 0);
-    ctrl.ctrl_localPhyParamSettings_bits_txAdjRuntime  = $urandom_range(1, 0);
-    ctrl.ctrl_localPhyParamSettings_bits_moduleId      = $urandom();
+    ctrl.local_params.valid = $urandom_range(1, 0);
+    ctrl.local_params.voltageSwing = $urandom();
+    ctrl.local_params.maxDataRate = $urandom();
+    ctrl.local_params.clockMode = $urandom_range(1, 0);
+    ctrl.local_params.clockPhase = $urandom_range(1, 0);
+    ctrl.local_params.ucieSx8 = $urandom_range(1, 0);
+    ctrl.local_params.sbFeatExt = $urandom_range(1, 0);
+    ctrl.local_params.txAdjRuntime = $urandom_range(1, 0);
+    ctrl.local_params.moduleId = $urandom();
 
-    ctrl.ctrl_linkTrainingParameters_clockPhase        = $urandom();
-    ctrl.ctrl_linkTrainingParameters_dataPattern       = $urandom();
-    ctrl.ctrl_linkTrainingParameters_validPattern      = $urandom();
-    ctrl.ctrl_linkTrainingParameters_patternMode       = $urandom_range(1, 0);
-    ctrl.ctrl_linkTrainingParameters_iterationCount    = $urandom();
-    ctrl.ctrl_linkTrainingParameters_idleCount         = $urandom();
-    ctrl.ctrl_linkTrainingParameters_burstCount        = $urandom();
-    ctrl.ctrl_linkTrainingParameters_maxErrorThreshold = $urandom();
-    ctrl.ctrl_linkTrainingParameters_comparisonMode    = $urandom_range(1, 0);
+    ctrl.training_params.clockPhase = $urandom();
+    ctrl.training_params.dataPattern = $urandom();
+    ctrl.training_params.validPattern = $urandom();
+    ctrl.training_params.patternMode = $urandom_range(1, 0);
+    ctrl.training_params.iterationCount = $urandom();
+    ctrl.training_params.idleCount = $urandom();
+    ctrl.training_params.burstCount = $urandom();
+    ctrl.training_params.maxErrorThreshold = $urandom();
+    ctrl.training_params.comparisonMode = $urandom_range(1, 0);
 
-    ctrl.ctrl_swStartLinkTraining                      = $urandom_range(1, 0);
-    ctrl.ctrl_swRetrainRequest                         = $urandom_range(1, 0);
-    ctrl.ctrl_linkOpParamOverride                      = $urandom_range(1, 0);
-    ctrl.ctrl_clockPhaseSelect                         = $urandom();
-    ctrl.ctrl_maxErrorThresholdPerLane                 = $urandom();
-    ctrl.ctrl_changeInRuntimeLinkCtrlRegsDetected      = $urandom_range(1, 0);
-    ctrl.ctrl_runtimeLinkCtrlBusyBit                   = $urandom_range(1, 0);
-    ctrl.ctrl_runtimeRequestForRepair                  = $urandom_range(1, 0);
+    ctrl.link_control.swStartLinkTraining = $urandom_range(1, 0);
+    ctrl.link_control.swRetrainRequest = $urandom_range(1, 0);
+    ctrl.link_control.linkOpParamOverride = $urandom_range(1, 0);
+    ctrl.link_control.clockPhaseSelect = $urandom();
+    ctrl.link_control.maxErrorThresholdPerLane = $urandom();
+    ctrl.link_control.changeInRuntimeLinkCtrlRegsDetected = $urandom_range(1, 0);
+    ctrl.link_control.runtimeLinkCtrlBusyBit = $urandom_range(1, 0);
+    ctrl.link_control.runtimeRequestForRepair = $urandom_range(1, 0);
   endtask
 
   task automatic reset_dut();
     // drive all rdi lp signals to zero
     drive_rdi_idle();
 
-    // randomize unrelated afe, sideband, ctrl input signals
-    randomize_afe_inputs();
-    randomize_sideband_inputs();
+    // Randomize unrelated analog and control inputs.
+    randomize_analog_inputs();
     randomize_ctrl_inputs();
 
     // trigger reset
@@ -123,11 +108,11 @@ module tb_top;
   task automatic test_rdi_wake_with_clocks_ready();
     @(negedge clock);
     rdi.lp_wake_req = 1'b1;
-    afe.status_clocksUngatedAndStable = 1'b0;
+    analog.status.clocksUngatedAndStable = 1'b0;
     repeat ($urandom_range(8, 1)) @(posedge clock);  // Model a delayed PHY clock
     if (rdi.pl_wake_ack !== 1'b0) $fatal(1, "pl_wake_ack asserted before PHY clocks were ready");
     @(negedge clock);
-    afe.status_clocksUngatedAndStable = 1'b1;
+    analog.status.clocksUngatedAndStable = 1'b1;
     wait (rdi.pl_wake_ack === 1'b1);
 
     repeat ($urandom_range(8, 1)) @(posedge clock);  // Keep lp_wake_req high for more samples
